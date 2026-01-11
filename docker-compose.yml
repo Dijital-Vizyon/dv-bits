@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  cpp_vision:
+    build:
+      context: .
+      dockerfile: cpp_vision/Dockerfile
+    container_name: cpp_vision_node
+    ports:
+      - "50051:50051"
+    environment:
+      - GRPC_VERBOSITY=INFO
+    networks:
+      - bits_network
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  rust_orchestrator:
+    build:
+      context: .
+      dockerfile: rust_orchestrator/Dockerfile
+    container_name: rust_orchestrator
+    depends_on:
+      - cpp_vision
+    environment:
+      - VISION_ENDPOINT=http://cpp_vision:50051
+      - RUST_LOG=info
+    networks:
+      - bits_network
+    restart: unless-stopped
+
+networks:
+  bits_network:
+    driver: bridge

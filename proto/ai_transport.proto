@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package bits;
+
+// OpCodes for agent communication
+enum OpCode {
+    OP_UNKNOWN = 0;
+    OP_INFER_REQ = 1;      // Request inference from vision node
+    OP_INFER_RESP = 2;     // Inference response
+    OP_HEARTBEAT = 3;      // Keep-alive ping
+    OP_ERROR = 4;          // Error frame
+    OP_SHUTDOWN = 5;       // Graceful shutdown request
+}
+
+// Quantized Latent Space representation
+message LatentSpace {
+    uint32 dimensions = 1;              // Number of dimensions
+    bytes quantized_vector = 2;         // int8 quantized data (75% smaller than float32)
+    float scale_factor = 3;             // Dequantization constant
+    float zero_point = 4;               // Zero point for quantization
+}
+
+// Metadata for the frame
+message FrameMetadata {
+    uint64 timestamp_ns = 1;            // Nanosecond timestamp
+    string agent_id = 2;                // Unique agent identifier
+    uint32 sequence_number = 3;         // Frame sequence number
+    map<string, string> context = 4;    // Additional context key-value pairs
+}
+
+// Main agent communication frame
+message AgentFrame {
+    OpCode opcode = 1;                  // Operation code
+    LatentSpace latent = 2;             // Quantized latent embedding
+    FrameMetadata metadata = 3;          // Frame metadata
+    bytes raw_data = 4;                 // Optional raw binary data
+    string error_message = 5;           // Error message (if opcode is OP_ERROR)
+}
+
+// Service definition for gRPC
+service AgentTransport {
+    // Unary RPC for single request/response
+    rpc SendFrame(AgentFrame) returns (AgentFrame);
+    
+    // Streaming RPC for continuous communication
+    rpc StreamFrames(stream AgentFrame) returns (stream AgentFrame);
+    
+    // Health check
+    rpc HealthCheck(AgentFrame) returns (AgentFrame);
+}

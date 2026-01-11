@@ -1,0 +1,18 @@
+[package]
+name = "examples"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "example_client"
+path = "example_client.rs"
+
+[dependencies]
+tokio = { version = "1.35", features = ["full"] }
+tonic = "0.11"
+tonic-build = "0.11"
+prost = "0.12"
+prost-types = "0.12"
+
+[build-dependencies]
+tonic-build = "0.11"

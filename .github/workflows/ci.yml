@@ -1,0 +1,76 @@
+name: CI/CD - Auto-generate Bindings
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'proto/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'proto/**'
+
+jobs:
+  generate-bindings:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Protobuf
+      uses: arduino/setup-protoc@v2
+      with:
+        version: '25.x'
+    
+    - name: Setup gRPC
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential autoconf libtool pkg-config
+        git clone --recurse-submodules -b v1.60.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
+        cd grpc
+        mkdir -p cmake/build
+        cd cmake/build
+        cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF ../..
+        make -j$(nproc)
+        sudo make install
+        sudo ldconfig
+    
+    - name: Generate C++ bindings
+      run: |
+        mkdir -p cpp_vision/src/generated
+        protoc --cpp_out=cpp_vision/src/generated \
+               --grpc_out=cpp_vision/src/generated \
+               --plugin=protoc-gen-grpc=`which grpc_cpp_plugin` \
+               --proto_path=proto \
+               proto/ai_transport.proto
+    
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Generate Rust bindings
+      run: |
+        cd rust_orchestrator
+        cargo build
+    
+    - name: Check C++ compilation
+      run: |
+        cd cpp_vision
+        mkdir -p build
+        cd build
+        cmake ..
+        make -j$(nproc)
+    
+    - name: Check Rust compilation
+      run: |
+        cd rust_orchestrator
+        cargo build --release
+    
+    - name: Commit generated files
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add cpp_vision/src/generated/ rust_orchestrator/src/generated/
+        git diff --staged --quiet || git commit -m "Auto-generate bindings from proto changes [skip ci]"
+        git push
